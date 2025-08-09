@@ -1,0 +1,22 @@
+{
+  "name": "autocut-server",
+  "version": "1.0.0",
+  "description": "AutoCut backend server for video deadspace removal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "nanoid": "^5.0.7",
+    "ffprobe-static": "^3.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+} 

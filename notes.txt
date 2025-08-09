@@ -1,0 +1,3 @@
+Improve UI
+speed up cutting time
+add other editing features: auto captions, background music

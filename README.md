@@ -11,7 +11,7 @@ AutoCut is a simple web app to upload a video, automatically remove deadspace (s
   - Linux: use your package manager
   - Windows: install from the FFmpeg site and add to PATH
 
-## Getting Started
+## Getting Started (Backend)
 
 1. Install dependencies:
 
@@ -26,9 +26,21 @@ npm install
 npm start
 ```
 
-3. Open the app in your browser:
+3. Server URL:
 
-- Visit `http://localhost:3000`
+- `http://localhost:3000`
+
+## Getting Started (React Frontend)
+
+In development, run the React app with Vite. It proxies `/api` to the backend.
+
+```
+cd web
+npm install
+npm run dev
+```
+
+Open the React app at `http://localhost:5173`. The upload/progress/result flow is wired to the same backend endpoints.
 
 ## How it works
 

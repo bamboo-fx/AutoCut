@@ -112,9 +112,10 @@ function buildNonSilentSegments(duration, silencePairs) {
   return segments.filter(([a, b]) => b - a >= 0.2);
 }
 
-async function cutSegments(inputPath, segments, outDir) {
+async function cutSegments(inputPath, segments, outDir, onProgress) {
   const segPaths = [];
   let index = 0;
+  const total = segments.length;
   for (const [start, end] of segments) {
     const outPath = path.join(outDir, `seg_${index}.mp4`);
     const args = [
@@ -123,6 +124,10 @@ async function cutSegments(inputPath, segments, outDir) {
       '-ss', start.toFixed(3),
       '-to', end.toFixed(3),
       '-avoid_negative_ts', 'make_zero',
+      '-map', '0:v:0',
+      '-map', '0:a:0?',
+      '-map_metadata', '-1',
+      '-pix_fmt', 'yuv420p',
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-crf', '23',
@@ -133,6 +138,9 @@ async function cutSegments(inputPath, segments, outDir) {
     await runCommand('ffmpeg', args);
     segPaths.push(outPath);
     index++;
+    if (typeof onProgress === 'function') {
+      try { onProgress(index, total); } catch {}
+    }
   }
   return segPaths;
 }
@@ -141,61 +149,116 @@ async function concatSegments(segPaths, outPath) {
   const listPath = outPath + '.list.txt';
   const content = segPaths.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
   await fsp.writeFile(listPath, content, 'utf8');
-  try {
-    // try stream copy
-    await runCommand('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', outPath]);
-  } catch (e) {
-    // fallback to re-encode
-    await runCommand('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-movflags', '+faststart', outPath]);
-  }
+  // Always re-encode on concat to ensure a clean, safe container
+  await runCommand('ffmpeg', [
+    '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
+    '-map_metadata', '-1',
+    '-pix_fmt', 'yuv420p',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+    '-c:a', 'aac',
+    '-movflags', '+faststart',
+    outPath
+  ]);
 }
 
+// Simple in-memory progress store per job
+const jobProgress = new Map();
+
+app.get('/api/progress/:jobId', (req, res) => {
+  const jobId = req.params.jobId;
+  const info = jobProgress.get(jobId) || { status: 'unknown', percent: 0 };
+  res.json(info);
+});
+
 app.post('/api/process', upload.single('videoFile'), async (req, res) => {
+  const jobId = req.jobId;
   const noiseDb = parseFloat(req.body.noiseDb ?? '-30');
   const minSilence = parseFloat(req.body.minSilence ?? '0.4');
   const inputPath = path.join(req.jobDir, req.file.filename);
   const outPath = path.join(req.jobDir, 'output.mp4');
 
-  try {
-    const duration = await getDurationSeconds(inputPath);
-    const { stderr } = await runCommand('ffmpeg', [
-      '-i', inputPath,
-      '-af', `silencedetect=noise=${noiseDb}dB:d=${minSilence}`,
-      '-f', 'null', '-'
-    ]);
-    const silencePairs = parseSilenceLog(stderr);
+  jobProgress.set(jobId, { status: 'queued', percent: 0, jobId, jobDir: req.jobDir, outPath });
 
-    // If no silence detected, just pass-through
-    if (silencePairs.length === 0) {
-      await runCommand('ffmpeg', ['-y', '-i', inputPath, '-c', 'copy', outPath]);
-    } else {
-      const segments = buildNonSilentSegments(duration, silencePairs);
-      if (segments.length === 0) {
-        // Entirely silent? Return a 1-second black/silent video
+  // Immediately respond with jobId so the client can poll progress
+  res.status(202).json({ jobId });
+
+  // Process asynchronously
+  setImmediate(async () => {
+    try {
+      jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'analyzing', percent: 5 });
+      const duration = await getDurationSeconds(inputPath);
+      const { stderr } = await runCommand('ffmpeg', [
+        '-i', inputPath,
+        '-af', `silencedetect=noise=${noiseDb}dB:d=${minSilence}`,
+        '-f', 'null', '-'
+      ]);
+      const silencePairs = parseSilenceLog(stderr);
+
+      if (silencePairs.length === 0) {
+        jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'encoding', percent: 60 });
         await runCommand('ffmpeg', [
           '-y',
-          '-f', 'lavfi', '-i', 'color=black:s=1280x720:d=1:r=30',
-          '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
-          '-shortest', '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', outPath
+          '-i', inputPath,
+          '-map', '0:v:0',
+          '-map', '0:a:0?',
+          '-map_metadata', '-1',
+          '-pix_fmt', 'yuv420p',
+          '-c:v', 'libx264',
+          '-preset', 'veryfast',
+          '-crf', '23',
+          '-c:a', 'aac',
+          '-movflags', '+faststart',
+          outPath
         ]);
       } else {
-        const segPaths = await cutSegments(inputPath, segments, req.jobDir);
-        await concatSegments(segPaths, outPath);
+        const segments = buildNonSilentSegments(duration, silencePairs);
+        if (segments.length === 0) {
+          jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'generating', percent: 70 });
+          await runCommand('ffmpeg', [
+            '-y',
+            '-f', 'lavfi', '-i', 'color=black:s=1280x720:d=1:r=30',
+            '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
+            '-shortest', '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', outPath
+          ]);
+        } else {
+          jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'cutting', percent: 30 });
+          const segPaths = await cutSegments(inputPath, segments, req.jobDir, (idx, total) => {
+            const base = 30;
+            const span = 40;
+            const p = Math.round(base + (idx / total) * span);
+            jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'cutting', percent: Math.min(p, 70) });
+          });
+          jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'concatenating', percent: 75 });
+          await concatSegments(segPaths, outPath);
+        }
       }
+      jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'done', percent: 100 });
+    } catch (err) {
+      console.error(err);
+      try { await fsp.rm(req.jobDir, { recursive: true, force: true }); } catch {}
+      jobProgress.set(jobId, { ...(jobProgress.get(jobId) || {}), status: 'error', percent: 100, error: String(err && err.message || err) });
     }
+  });
+});
 
+app.get('/api/result/:jobId', async (req, res) => {
+  const jobId = req.params.jobId;
+  const info = jobProgress.get(jobId);
+  if (!info) return res.status(404).json({ error: 'Unknown job' });
+  if (info.status !== 'done' || !info.outPath) return res.status(409).json({ error: 'Not ready' });
+  try {
     res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', 'attachment; filename="autocut.mp4"');
-    const stream = fs.createReadStream(outPath);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Use inline to allow in-browser preview; omit attachment header to avoid forced download
+    res.setHeader('Content-Disposition', 'inline; filename="autocut.mp4"');
+    const stream = fs.createReadStream(info.outPath);
     stream.pipe(res);
     stream.on('close', async () => {
-      // cleanup
-      try { await fsp.rm(req.jobDir, { recursive: true, force: true }); } catch {}
+      try { await fsp.rm(info.jobDir, { recursive: true, force: true }); } catch {}
+      jobProgress.delete(jobId);
     });
   } catch (err) {
-    console.error(err);
-    try { await fsp.rm(req.jobDir, { recursive: true, force: true }); } catch {}
-    res.status(500).json({ error: 'Processing failed', details: String(err && err.message || err) });
+    res.status(500).json({ error: 'Failed to stream result' });
   }
 });
 

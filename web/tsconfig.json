@@ -8,6 +8,8 @@
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true

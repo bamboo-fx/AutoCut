@@ -1,4 +1,8 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
 
 function clamp(n: number, min = 0, max = 100) { return Math.max(min, Math.min(max, n)); }
 
@@ -122,18 +126,14 @@ export default function App() {
               <div className="mt-3 text-xs text-white/50">Supported: most video formats. Files stay on your device; processing is local.</div>
 
               <div className="mt-6">
-                <button
-                  onClick={startProcess}
-                  disabled={!canProcess}
-                  className="w-full inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-semibold"
-                >
+                <Button onClick={startProcess} disabled={!canProcess} className="w-full h-12">
                   {isLoading && (
                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
                   )}
                   <span>Remove Deadspace</span>
-                </button>
-                <div className="mt-3 h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-2 bg-red-500 transition-all duration-300" style={{ width: `${clamp(progress)}%` }}></div>
+                </Button>
+                <div className="mt-3">
+                  <Progress value={clamp(progress)} />
                 </div>
                 <div className="mt-2 text-sm text-white/70">{status}</div>
               </div>
@@ -142,14 +142,14 @@ export default function App() {
             <aside className="space-y-5">
               <div className="bg-white/5 rounded-xl p-4">
                 <h2 className="font-semibold mb-3">Parameters</h2>
-                <label className="block text-sm mb-1">Silence Threshold (dB)</label>
-                <input type="range" min={-60} max={-10} step={1} value={noiseDb} onChange={(e) => setNoiseDb(Number(e.target.value))} className="w-full" />
+                <Label className="block mb-2">Silence Threshold (dB)</Label>
+                <Slider min={-60} max={-10} step={1} value={[noiseDb]} onValueChange={(v: number[]) => setNoiseDb(v[0])} />
                 <div className="text-xs text-white/60">{noiseDb} dB</div>
 
                 <div className="h-4"></div>
 
-                <label className="block text-sm mb-1">Minimum Silence Length (s)</label>
-                <input type="range" min={0.1} max={2.0} step={0.1} value={minSilence} onChange={(e) => setMinSilence(Number(e.target.value))} className="w-full" />
+                <Label className="block mb-2">Minimum Silence Length (s)</Label>
+                <Slider min={0.1} max={2.0} step={0.1} value={[minSilence]} onValueChange={(v: number[]) => setMinSilence(v[0])} />
                 <div className="text-xs text-white/60">{minSilence.toFixed(1)} s</div>
               </div>
 

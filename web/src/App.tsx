@@ -102,11 +102,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">
-      <div className="max-w-4xl mx-auto px-4 py-10">
-        <header className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">AutoCut</h1>
-          <a className="text-red-400 hover:text-red-300 text-sm" href="https://ffmpeg.org/" target="_blank" rel="noreferrer">Powered by FFmpeg</a>
+    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white flex items-center justify-center">
+      <div className="w-full max-w-4xl px-4 py-6">
+        <header className="mb-8">
+          <div className="flex flex-col items-center text-center">
+            <h1 className="font-display title-glow text-5xl md:text-6xl font-extrabold tracking-widest">AutoCut</h1>
+            <a className="mt-2 text-red-400 hover:text-red-300 text-sm" href="https://ffmpeg.org/" target="_blank" rel="noreferrer">Powered by FFmpeg</a>
+          </div>
         </header>
 
         <main className="rounded-2xl p-6 shadow-xl" style={{backdropFilter:'blur(10px)', background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)'}}>

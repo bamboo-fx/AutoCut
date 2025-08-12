@@ -13,4 +13,16 @@ html, body, #root {
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+.font-display {
+  font-family: 'Orbitron', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial;
+}
+
+.title-glow {
+  background: linear-gradient(90deg, #fff, #f87171, #ef4444);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 20px rgba(248, 113, 113, 0.2), 0 0 40px rgba(239, 68, 68, 0.15);
 } 
